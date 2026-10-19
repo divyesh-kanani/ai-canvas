@@ -227,11 +227,13 @@ function StickyNote({
   const [isDragging, setIsDragging] = useState(false);
   const [aiQuestion, setAiQuestion] = useState("");
   const [aiAnswer, setAiAnswer] = useState("");
+  const [answeredQuestion, setAnsweredQuestion] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
   const [organizedNote, setOrganizedNote] = useState<OrganizedNote | null>(null);
   const [organizing, setOrganizing] = useState(false);
   const [organizeError, setOrganizeError] = useState("");
+  const [noteCreated, setNoteCreated] = useState(false);
   const addNoteFromAI = useCanvasStore((state) => state.addNoteFromAI);
 
   const handleAskAI = async () => {
@@ -242,12 +244,15 @@ function StickyNote({
     setAiLoading(true);
     setAiError("");
     setAiAnswer("");
+    setAnsweredQuestion("");
     setOrganizedNote(null);
     setOrganizeError("");
+    setNoteCreated(false);
 
     try {
       const answer = await askAI(question);
       setAiAnswer(answer);
+      setAnsweredQuestion(question);
     } catch (error) {
       setAiError(error instanceof Error ? error.message : "Something went wrong.");
     } finally {
@@ -256,16 +261,15 @@ function StickyNote({
   };
 
   const handleOrganizeAnswer = async () => {
-    const question = aiQuestion.trim();
-
-    if (!question || !aiAnswer || organizing) return;
+    if (!answeredQuestion || !aiAnswer || organizing) return;
 
     setOrganizing(true);
     setOrganizeError("");
     setOrganizedNote(null);
+    setNoteCreated(false);
 
     try {
-      setOrganizedNote(await organizeAnswer(question, aiAnswer));
+      setOrganizedNote(await organizeAnswer(answeredQuestion, aiAnswer));
     } catch (error) {
       setOrganizeError(
         error instanceof Error ? error.message : "Could not organize the answer.",
@@ -293,6 +297,7 @@ function StickyNote({
     }
 
     addNoteFromAI(title, content, x, y);
+    setNoteCreated(true);
   };
 
   /* ---------- drag ---------- */
@@ -485,9 +490,10 @@ function StickyNote({
             <button
               type="button"
               onClick={handleCreateNote}
-              className="rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white"
+              disabled={noteCreated}
+              className="rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white disabled:opacity-50"
             >
-              Create note
+              {noteCreated ? "Note created" : "Create note"}
             </button>
           </div>
         )}
