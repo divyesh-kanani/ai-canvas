@@ -7,6 +7,7 @@ interface CanvasStore {
   selectedId: string | null;
   addNote: () => void;
   addNoteAt: (x: number, y: number) => void;
+  addNoteFromAI: (title: string, content: string, x: number, y: number) => void;
   updateNote: (id: string, update: Partial<Note>) => void;
   deleteNote: (id: string | null) => void;
   setSelectedNote: (id: string | null) => void;
@@ -65,6 +66,26 @@ export const useCanvasStore = create<CanvasStore>((set) => ({
             title: "New note",
             content: "Type here to capture ideas.",
             color: "#c7d2fe",
+          },
+        ],
+        selectedId: id,
+      };
+    }),
+  addNoteFromAI: (title, content, x, y) =>
+    set((state) => {
+      const id = `note-${Date.now()}`;
+      return {
+        notes: [
+          ...state.notes,
+          {
+            id,
+            x,
+            y,
+            width: 280,
+            height: 220,
+            title,
+            content,
+            color: "#bbf7d0",
           },
         ],
         selectedId: id,

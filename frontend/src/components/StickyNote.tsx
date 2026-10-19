@@ -172,7 +172,15 @@
 
 
 
-import { memo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  memo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
+
+import { askAI, organizeAnswer, type OrganizedNote } from "../services/ai";
+import { useCanvasStore } from "../store/canvasStore";
 import type { Note } from "../types/note";
 
 export type Side = "top" | "right" | "bottom" | "left";
@@ -217,6 +225,75 @@ function StickyNote({
   const dragRef = useRef<{ startX: number; startY: number; x: number; y: number } | null>(null);
   const resizeRef = useRef<{ startX: number; startY: number; width: number; height: number } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [aiQuestion, setAiQuestion] = useState("");
+  const [aiAnswer, setAiAnswer] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [organizedNote, setOrganizedNote] = useState<OrganizedNote | null>(null);
+  const [organizing, setOrganizing] = useState(false);
+  const [organizeError, setOrganizeError] = useState("");
+  const addNoteFromAI = useCanvasStore((state) => state.addNoteFromAI);
+
+  const handleAskAI = async () => {
+    const question = aiQuestion.trim();
+
+    if (!question || aiLoading) return;
+
+    setAiLoading(true);
+    setAiError("");
+    setAiAnswer("");
+    setOrganizedNote(null);
+    setOrganizeError("");
+
+    try {
+      const answer = await askAI(question);
+      setAiAnswer(answer);
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : "Something went wrong.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleOrganizeAnswer = async () => {
+    const question = aiQuestion.trim();
+
+    if (!question || !aiAnswer || organizing) return;
+
+    setOrganizing(true);
+    setOrganizeError("");
+    setOrganizedNote(null);
+
+    try {
+      setOrganizedNote(await organizeAnswer(question, aiAnswer));
+    } catch (error) {
+      setOrganizeError(
+        error instanceof Error ? error.message : "Could not organize the answer.",
+      );
+    } finally {
+      setOrganizing(false);
+    }
+  };
+
+  const handleCreateNote = () => {
+    if (!organizedNote) return;
+
+    const title = organizedNote.title.trim() || "AI-generated note";
+    const content = [
+      organizedNote.summary,
+      "",
+      "Key points:",
+      ...organizedNote.key_points.map((point) => `- ${point}`),
+    ].join("\n");
+    let x = note.x + note.width + 24;
+    const y = note.y;
+
+    if (x + 280 > BOARD_SIZE) {
+      x = Math.max(0, note.x - 304);
+    }
+
+    addNoteFromAI(title, content, x, y);
+  };
 
   /* ---------- drag ---------- */
 
@@ -346,6 +423,75 @@ function StickyNote({
         onChange={(event) => onUpdate(note.id, { content: event.target.value })}
         placeholder="Write something..."
       />
+      <div
+        data-no-drag
+        className="mt-2 space-y-2"
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <div className="flex gap-2">
+          <input
+            value={aiQuestion}
+            onChange={(event) => setAiQuestion(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void handleAskAI();
+              }
+            }}
+            placeholder="Ask AI something..."
+            className="min-w-0 flex-1 rounded-lg border border-black/10 bg-white/90 px-2 py-1.5 text-xs text-black placeholder:text-gray-500 outline-none"
+            disabled={aiLoading}
+          />
+          <button
+            type="button"
+            onClick={() => void handleAskAI()}
+            disabled={aiLoading || !aiQuestion.trim()}
+            className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+          >
+            {aiLoading ? "Thinking..." : "Ask AI"}
+          </button>
+        </div>
+
+        {aiError && <p className="text-xs text-red-700">{aiError}</p>}
+
+        {aiAnswer && (
+          <div className="space-y-2">
+            <div className="max-h-40 overflow-y-auto rounded-lg bg-white/80 p-2 text-xs leading-5 text-slate-800">
+              <p className="mb-1 font-semibold">AI Answer</p>
+              <p className="whitespace-pre-wrap">{aiAnswer}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleOrganizeAnswer()}
+              disabled={organizing}
+              className="rounded-lg border border-slate-400/70 bg-white/80 px-2.5 py-1.5 text-xs font-medium text-slate-800 disabled:opacity-50"
+            >
+              {organizing ? "Organizing..." : "Organize answer"}
+            </button>
+          </div>
+        )}
+        {organizeError && <p className="text-xs text-red-700">{organizeError}</p>}
+        {organizedNote && (
+          <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg bg-white/90 p-2 text-xs leading-5 text-slate-800">
+            <p className="font-semibold">{organizedNote.title}</p>
+            <p>{organizedNote.summary}</p>
+            {organizedNote.key_points.length > 0 && (
+              <ul className="list-disc space-y-0.5 pl-4">
+                {organizedNote.key_points.map((point, index) => (
+                  <li key={`${index}-${point}`}>{point}</li>
+                ))}
+              </ul>
+            )}
+            <button
+              type="button"
+              onClick={handleCreateNote}
+              className="rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-medium text-white"
+            >
+              Create note
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* footer */}
       <div className="mt-2 flex items-center gap-1.5 pr-6">
